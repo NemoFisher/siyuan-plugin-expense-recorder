@@ -9,7 +9,7 @@ export function buildSystemPrompt(cfg: ExpenseConfig, today: string): string {
         "规则：",
         `1) date 是消费实际发生的日期（YYYY-MM-DD）。今天是 ${today}。内容中明确出现"今天/昨天/前天/X月X日"等日期信息时据此推算；看不到明确日期时（例如支付账单列表截图只显示时间）严禁编造日期，必须使用今天 ${today}。`,
         "2) time 是 24 小时制 HH:MM；无法判断时用空字符串。",
-        "3) amount 是数字，不带货币符号和千分位；支付账单中支出常显示为负数（如 -15.90），此时填正数 15.90；多笔消费无法拆分时填合计金额。",
+        "3) amount 是数字，不带货币符号和千分位；支付账单中支出常显示为负数（如 -25.00），此时填正数 25.00；多笔消费无法拆分时填合计金额。",
         "4) currency 使用 ISO 代码，默认 CNY。",
         `5) category 必须优先从以下科目中选择最贴近的一个：${cfg.categories}。确实都不合适时才允许自拟，且不超过 4 个字。`,
         "6) location 填消费发生的地点或平台（如：美团外卖、永辉超市），无法判断用空字符串；账单截图中的商户名（如 星巴克、肯德基）应填入 merchant 而不是 location。",
@@ -153,7 +153,7 @@ export function parseRecords(data: any, _cfg: ExpenseConfig, today: string): Exp
             continue;
         }
         const amountRaw = Number(item.amount);
-        // 支付账单的支出常以负数表示（如 -15.90），统一取绝对值
+        // 支付账单的支出常以负数表示（如 -25.00），统一取绝对值
         const amount = Math.abs(amountRaw);
         if (!isFinite(amount) || amount <= 0 || amount > 1e9) {
             continue;
