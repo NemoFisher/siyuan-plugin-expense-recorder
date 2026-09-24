@@ -12,7 +12,7 @@ export function buildSystemPrompt(cfg: ExpenseConfig, today: string): string {
         "3) amount 是数字，不带货币符号和千分位；支付账单中支出常显示为负数（如 -15.90），此时填正数 15.90；多笔消费无法拆分时填合计金额。",
         "4) currency 使用 ISO 代码，默认 CNY。",
         `5) category 必须优先从以下科目中选择最贴近的一个：${cfg.categories}。确实都不合适时才允许自拟，且不超过 4 个字。`,
-        "6) location 填消费发生的地点或平台（如：美团外卖、永辉超市），无法判断用空字符串；账单截图中的商户名（如 City'super、陈香贵）应填入 merchant 而不是 location。",
+        "6) location 填消费发生的地点或平台（如：美团外卖、永辉超市），无法判断用空字符串；账单截图中的商户名（如 星巴克、肯德基）应填入 merchant 而不是 location。",
         "7) merchant 填商家名称（如：肯德基、滴滴出行），无法判断用空字符串。",
         "8) note 用一句话概括买了什么/用途，不超过 20 个字。",
         '9) 如果内容与消费完全无关（纯备忘、聊天记录、日程等），输出 {"records":[]}。',
