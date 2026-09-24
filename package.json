@@ -1,0 +1,20 @@
+{
+  "name": "siyuan-plugin-expense-recorder",
+  "version": "0.4.2",
+  "description": "定时将收集箱中的图片与文字通过 AI 识别为消费记录，并按消费日期登记到指定笔记（如 20260901）",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "check": "tsc --noEmit",
+    "smoke": "esbuild scripts/smoke.ts --bundle --platform=node --format=cjs --outfile=scripts/smoke.cjs && node scripts/smoke.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "siyuan": "^1.0.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0",
+    "vite-plugin-static-copy": "^1.0.6",
+    "ws": "^8.21.3"
+  }
+}

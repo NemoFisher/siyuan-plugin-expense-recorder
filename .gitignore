@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+scripts/smoke.cjs
+*.log
+.DS_Store
+
+*.zip
+syfile.json

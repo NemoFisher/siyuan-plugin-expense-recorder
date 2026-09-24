@@ -1,0 +1,27 @@
+{
+  "name": "siyuan-plugin-expense-recorder",
+  "author": "NemoFisher",
+  "url": "https://github.com/NemoFisher/siyuan-plugin-expense-recorder",
+  "version": "0.4.2",
+  "minAppVersion": "3.0.0",
+  "displayName": {
+    "default": "Expense Recorder",
+    "zh_CN": "消费记录助手"
+  },
+  "description": {
+    "default": "Periodically extract expense records from your inbox (images & text) via AI and file them into daily notes like 20260901.",
+    "zh_CN": "定时将收集箱中的图片、文字通过 AI 识别为消费记录（金额、科目、时间、地点等），并按消费日期登记到对应笔记（如 20260901）中。"
+  },
+  "readme": {
+    "default": "README.md",
+    "zh_CN": "README.md"
+  },
+  "funding": {},
+  "keywords": [
+    "expense",
+    "bookkeeping",
+    "inbox",
+    "AI",
+    "OCR"
+  ]
+}
