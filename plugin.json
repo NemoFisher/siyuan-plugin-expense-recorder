@@ -2,7 +2,7 @@
   "name": "siyuan-plugin-expense-recorder",
   "author": "NemoFisher",
   "url": "https://github.com/NemoFisher/siyuan-plugin-expense-recorder",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "minAppVersion": "3.0.0",
   "displayName": {
     "default": "Expense Recorder",

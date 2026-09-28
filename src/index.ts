@@ -4,6 +4,7 @@ import {processInbox} from "./processor";
 import {openSettingsDialog} from "./settings";
 import {DEFAULT_CONFIG, ExpenseConfig} from "./types";
 import {WecomBotClient} from "./wecom";
+import {generateWeeklyReport, maybeRunWeeklyReport} from "./weekly";
 
 const CONFIG_FILE = "config.json";
 
@@ -28,6 +29,11 @@ export default class ExpenseRecorderPlugin extends Plugin {
             langKey: "openSetting",
             langText: (this.i18n as any)?.openSetting || "打开消费记录助手设置",
             callback: () => this.openSetting(),
+        });
+        this.addCommand({
+            langKey: "weeklyReport",
+            langText: (this.i18n as any)?.weeklyReport || "生成上周支出周报",
+            callback: () => this.runWeeklyReport(false),
         });
         this.addTopBar({
             icon: "iconExpenseRecorder",
@@ -134,6 +140,17 @@ export default class ExpenseRecorderPlugin extends Plugin {
             const stat = await processInbox(this.config, avStore);
             this.saveData("db-avs.json", avStore).catch(() => {
             });
+            // 周一自动生成上周周报（已生成则自动跳过）
+            if (this.config.dbEnabled) {
+                try {
+                    const docId = await maybeRunWeeklyReport(this.config, avStore);
+                    if (docId) {
+                        showMessage("已生成上周支出周报", 4000, "info");
+                    }
+                } catch (e: any) {
+                    console.error("[expense-recorder] 周报生成失败：", e);
+                }
+            }
             this.saveData("lastrun.json", {
                 startedAt, finishedAt: new Date().toISOString(), ok: true, ...stat,
             }).catch(() => {
@@ -168,5 +185,23 @@ export default class ExpenseRecorderPlugin extends Plugin {
 
     openSetting() {
         openSettingsDialog(this);
+    }
+
+    /** 手动生成上周周报（命令面板触发） */
+    async runWeeklyReport(silent: boolean) {
+        try {
+            let avStore: Record<string, string> = {};
+            try {
+                const stored: any = await this.loadData("db-avs.json");
+                avStore = typeof stored === "string" ? JSON.parse(stored) : (stored || {});
+            } catch {
+                avStore = {};
+            }
+            const docId = await generateWeeklyReport(this.config, avStore);
+            showMessage(docId ? "周报已生成" : "上周周报已存在，未重复生成", 4000, "info");
+        } catch (e: any) {
+            console.error("[expense-recorder] 周报生成失败：", e);
+            showMessage(`周报生成失败：${e?.message || e}`, 8000, "error");
+        }
     }
 }

@@ -1,5 +1,6 @@
 {
   "processNow": "Process inbox now",
   "openSetting": "Open Expense Recorder settings",
-  "topBarTitle": "Extract expense records from inbox"
+  "topBarTitle": "Extract expense records from inbox",
+  "weeklyReport": "Generate last week expense report"
 }

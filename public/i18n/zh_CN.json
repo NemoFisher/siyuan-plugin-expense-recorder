@@ -1,5 +1,6 @@
 {
   "processNow": "立即处理收集箱",
   "openSetting": "打开消费记录助手设置",
-  "topBarTitle": "识别收集箱中的消费记录"
+  "topBarTitle": "识别收集箱中的消费记录",
+  "weeklyReport": "生成上周支出周报"
 }
