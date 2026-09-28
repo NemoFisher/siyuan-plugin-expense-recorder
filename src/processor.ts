@@ -151,12 +151,27 @@ export async function ensureExpenseColumns(avId: string): Promise<AvColumnMap> {
 /** 日期 → 当日数据库 avID 的映射（由插件持久化在 db-avs.json） */
 export type AvStore = Record<string, string>;
 
+/** 索引刷新等待：查询结果为空时短暂重试（内核索引偶有滞后，避免重复创建文档/表格） */
+async function queryWithRetry(stmt: string, retries = 2, waitMs = 1500): Promise<any[]> {
+    for (let i = 0; ; i++) {
+        const rows = await sql(stmt);
+        if (rows.length || i >= retries) {
+            return rows;
+        }
+        await new Promise<void>(resolve => window.setTimeout(resolve, waitMs));
+    }
+}
+
 /** 确保当日文档里有一张独立数据库表（每日一表：当日记录只进当天表，汇总直接读当天表）
- *  返回 avID；若文档里存在无法识别 avID 的外来数据库块则返回空串（跳过登记） */
+ *  返回 avID；若文档里存在无法识别 avID 的外来数据库块则返回空串（跳过登记）
+ *  confirmed：本轮处理中已确认过表格块存在的日期集合，避免索引延迟导致重复插入 */
 export async function ensureDailyAv(cfg: ExpenseConfig, date: string, docId: string,
-                                    avStore: AvStore): Promise<string> {
+                                    avStore: AvStore, confirmed?: Set<string>): Promise<string> {
     let avId = avStore[date] || "";
-    const existing = await sql(
+    if (confirmed?.has(date)) {
+        return avId;
+    }
+    const existing = await queryWithRetry(
         `SELECT id FROM blocks WHERE root_id='${escSql(docId)}' AND type='av' LIMIT 1`);
     if (!existing.length) {
         if (!avId) {
@@ -182,6 +197,7 @@ export async function ensureDailyAv(cfg: ExpenseConfig, date: string, docId: str
         // 文档已有数据库块但映射缺失（通常为手动插入），无法反查其 avID
         return "";
     }
+    confirmed?.add(date);
     return avId;
 }
 
@@ -326,14 +342,15 @@ export async function writeDailySummary(cfg: ExpenseConfig, docId: string, avId:
 
 /** 刷新某日的汇总（自愈：文档或表格块被删时自动重建，数据在 av 存储中不丢失） */
 export async function updateDailySummary(cfg: ExpenseConfig, date: string,
-                                         avStore: AvStore, allowCreateDoc = false): Promise<void> {
+                                         avStore: AvStore, allowCreateDoc = false,
+                                         docCache?: Map<string, string>): Promise<void> {
     const compact = date.replace(/-/g, "");
-    let docId = await queryDocId(cfg.targetNotebookId, buildDocPath(cfg, compact));
+    let docId = docCache?.get(compact) || await queryDocId(cfg.targetNotebookId, buildDocPath(cfg, compact));
     if (!docId) {
         if (!allowCreateDoc || !avStore[date]) {
             return;
         }
-        docId = await ensureDailyDoc(cfg, compact);
+        docId = await ensureDailyDoc(cfg, compact, docCache);
     }
     const avId = await ensureDailyAv(cfg, date, docId, avStore);
     if (!avId) {
@@ -364,12 +381,21 @@ async function queryDocId(notebookId: string, hpath: string): Promise<string> {
     return rows.length ? rows[0].id : "";
 }
 
-/** 确保按日期命名的日记文档存在（自动逐级创建父文档），返回文档块 ID */
-export async function ensureDailyDoc(cfg: ExpenseConfig, compactDate: string): Promise<string> {
+/** 确保按日期命名的日记文档存在（自动逐级创建父文档），返回文档块 ID
+ *  docCache：本轮处理内的 日期→文档ID 缓存，防止索引延迟导致同轮重复建文档 */
+export async function ensureDailyDoc(cfg: ExpenseConfig, compactDate: string,
+                                     docCache?: Map<string, string>): Promise<string> {
+    const cached = docCache?.get(compactDate);
+    if (cached) {
+        return cached;
+    }
     const hpath = buildDocPath(cfg, compactDate);
-    const existing = await queryDocId(cfg.targetNotebookId, hpath);
-    if (existing) {
-        return existing;
+    const existing = await queryWithRetry(
+        `SELECT id FROM blocks WHERE box='${escSql(cfg.targetNotebookId)}' AND type='d' AND hpath='${escSql(hpath)}' LIMIT 1`,
+        1, 1500);
+    if (existing.length) {
+        docCache?.set(compactDate, existing[0].id);
+        return existing[0].id;
     }
     const segments = hpath.split("/").filter(Boolean);
     let prefix = "";
@@ -383,11 +409,15 @@ export async function ensureDailyDoc(cfg: ExpenseConfig, compactDate: string): P
     // 创建后 SQL 索引可能短暂滞后，优先使用接口返回的文档 ID
     const newId = typeof data === "string" ? data : (data?.id as string | undefined);
     if (newId) {
+        docCache?.set(compactDate, newId);
         return newId;
     }
-    const created = await queryDocId(cfg.targetNotebookId, hpath);
-    if (created) {
-        return created;
+    const created = await queryWithRetry(
+        `SELECT id FROM blocks WHERE box='${escSql(cfg.targetNotebookId)}' AND type='d' AND hpath='${escSql(hpath)}' LIMIT 1`,
+        2, 1500);
+    if (created.length) {
+        docCache?.set(compactDate, created[0].id);
+        return created[0].id;
     }
     throw new Error(`无法创建日记文档：${hpath}`);
 }
@@ -418,6 +448,9 @@ export async function processInbox(cfg: ExpenseConfig, avStore: AvStore = {}): P
         `SELECT id, content, markdown FROM blocks WHERE ${conds.join(" AND ")} LIMIT ${MAX_BLOCKS_PER_RUN}`);
     stat.total = blocks.length;
     const touchedDates = new Set<string>();
+    // 轮内缓存：同一轮处理中同一日期只解析一次文档 ID / 表格块，规避索引延迟造成的重复创建
+    const docCache = new Map<string, string>();
+    const avConfirmed = new Set<string>();
 
     for (const b of blocks) {
         try {
@@ -448,8 +481,8 @@ export async function processInbox(cfg: ExpenseConfig, avStore: AvStore = {}): P
                 const useDb = cfg.dbEnabled;
                 for (const [date, recs] of byDate) {
                     if (useDb) {
-                        const docId = await ensureDailyDoc(cfg, date.replace(/-/g, ""));
-                        const avId = await ensureDailyAv(cfg, date, docId, avStore);
+                        const docId = await ensureDailyDoc(cfg, date.replace(/-/g, ""), docCache);
+                        const avId = await ensureDailyAv(cfg, date, docId, avStore, avConfirmed);
                         if (avId) {
                             const {added, deduped} = await registerRecordsToDatabase(avId, recs);
                             stat.records += added;
@@ -461,7 +494,7 @@ export async function processInbox(cfg: ExpenseConfig, avStore: AvStore = {}): P
                             throw new Error(`当日文档存在无法识别的数据库块，已跳过 ${date} 的登记`);
                         }
                     } else {
-                        const docId = await ensureDailyDoc(cfg, date.replace(/-/g, ""));
+                        const docId = await ensureDailyDoc(cfg, date.replace(/-/g, ""), docCache);
                         const newIds = await appendBlock(docId, recs.map(r => buildRecordMarkdown(r, b.id)).join("\n"));
                         // 登记出的记录块也打上已处理标记，避免日后扩大扫描范围时把已有记录再识别一遍
                         await Promise.all(newIds.map(id => markProcessed(id).catch(() => {
@@ -490,7 +523,7 @@ export async function processInbox(cfg: ExpenseConfig, avStore: AvStore = {}): P
         }
         for (const date of dates) {
             try {
-                await updateDailySummary(cfg, date, avStore, touchedDates.has(date));
+                await updateDailySummary(cfg, date, avStore, touchedDates.has(date), docCache);
             } catch (e: any) {
                 stat.errors.push(`汇总更新失败 ${date}: ${e?.message || e}`);
             }

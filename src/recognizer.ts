@@ -15,7 +15,7 @@ export function buildSystemPrompt(cfg: ExpenseConfig, today: string): string {
         "6) location 填消费发生的地点或平台（如：美团外卖、永辉超市），无法判断用空字符串；账单截图中的商户名（如 星巴克、肯德基）应填入 merchant 而不是 location。",
         "7) merchant 填商家名称（如：肯德基、滴滴出行），无法判断用空字符串。",
         "8) note 用一句话概括买了什么/用途，不超过 20 个字。",
-        '9) 如果内容与消费完全无关（纯备忘、聊天记录、日程等），输出 {"records":[]}。',
+        '9) 只记录「支出」。退款、退货、报销到账、红包/转账收入等一切入账（正数入账、或标注"退款/已退款/收入"的条目）一律不要记录，直接忽略；与消费完全无关的内容同样输出 {"records":[]}。',
         "10) 内容中形如【企微 HH:MM】的方括号标记是系统添加的收集渠道时间戳，与消费无关；绝对不要把「企微」或这类标记当作地点、商家、科目或消费内容。",
     ].join("\n");
 }
@@ -163,6 +163,11 @@ export function parseRecords(data: any, _cfg: ExpenseConfig, today: string): Exp
         // 模型偶发把商家名塞进科目字段
         if (!category || category === merchant) {
             category = "其他";
+        }
+        // 退款/退货/收入不入账（模型漏判时的兜底）
+        const refundHint = `${category}|${merchant}|${item.note || ""}|${item.location || ""}`;
+        if (/退款|退货|收入|报销到账|已退回/.test(refundHint)) {
+            continue;
         }
         out.push({
             date: normalizeDate(String(item.date || ""), today),

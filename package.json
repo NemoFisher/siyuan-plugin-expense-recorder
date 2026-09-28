@@ -1,6 +1,6 @@
 {
   "name": "siyuan-plugin-expense-recorder",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "定时将收集箱中的图片与文字通过 AI 识别为消费记录，并按消费日期登记到指定笔记（如 20260901）",
   "type": "module",
   "scripts": {
